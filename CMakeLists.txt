@@ -52,6 +52,8 @@ SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -O0 -g  -Wall -Wextra -DDEBUG")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} -O3  -Wall -Wextra")
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -Wall -O3  -Wextra")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 SET(LIBS ${OpenCV_LIBS} ${EXTRA_LIBS})
 
 # Build paths
@@ -63,6 +65,8 @@ SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
 INCLUDE_DIRECTORIES("src/")
 INCLUDE_DIRECTORIES("src/avatar/")
 INCLUDE_DIRECTORIES("${CMAKE_CURRENT_BINARY_DIR}/src/")
+
+
 
 # Subdirectories with CMakeLists.txt
 ADD_SUBDIRECTORY(src/utils)
@@ -77,7 +81,6 @@ ADD_SUBDIRECTORY(src/expression-transfer)
 ADD_SUBDIRECTORY(src/display-avatar)
 ADD_SUBDIRECTORY(src/display-tracking)
 ADD_SUBDIRECTORY(src/create-avatar-model)
-ADD_SUBDIRECTORY(src/display-3d-points)
 
 IF(WITH_GUI)
   SET(CPACK_PACKAGE_NAME "clm")
