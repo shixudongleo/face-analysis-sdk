@@ -19,11 +19,19 @@
 
 #include "utils/helpers.hpp"
 #include "utils/command-line-arguments.hpp"
-#include "utils/points.hpp"
 #include "tracker/FaceTracker.hpp"
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
+
+// Wrapper for most external modules
+#include <boost/python.hpp>
+
+// np_opencv_converter
+#include "face-fit/conversion.h"
 
 using namespace FACETRACKER;
+
+namespace bp = boost::python;
 
 void
 print_usage()
@@ -43,7 +51,6 @@ print_usage()
     "                            Can range from 0 to 10 where 10 is extremely picky.\n"
     "                            The default is 5.\n"
     "  --title <string>          The window title to use.\n"                  
-    "  --3d                      Save 3D shape instead of the 2D shape.\n"
     "  --verbose                 Display information whilst processing.\n"
     "\n"
     "Default mode:\n"
@@ -80,7 +87,6 @@ struct Configuration
   int tracking_threshold;
   std::string window_title;
   bool verbose;
-  bool save_3d_points;
 
   int circle_radius;
   int circle_thickness;
@@ -100,10 +106,9 @@ int run_image_mode(const Configuration &cfg,
 		   const CommandLineArgument<std::string> &image_argument,
 		   const CommandLineArgument<std::string> &landmarks_argument);
 
-void display_data(const Configuration &cfg,
-		  const cv::Mat &image,
-		  const std::vector<cv::Point_<double> > &points,
-		  const Pose &pose);
+void display_image_and_points(const Configuration &cfg,
+			      const cv::Mat &image,
+			      const std::vector<cv::Point_<double> > &points);
 
 int
 run_program(int argc, char **argv)
@@ -125,8 +130,7 @@ run_program(int argc, char **argv)
   cfg.circle_radius = 2;
   cfg.circle_thickness = 1;
   cfg.circle_linetype = 8;
-  cfg.circle_shift = 0;  
-  cfg.save_3d_points = false;
+  cfg.circle_shift = 0;
 
   for (int i = 1; i < argc; i++) {
     std::string argument(argv[i]);
@@ -151,8 +155,6 @@ run_program(int argc, char **argv)
       cfg.tracking_threshold = get_argument<int>(&i, argc, argv);
     } else if (argument == "--verbose") {
       cfg.verbose = true;
-    } else if (argument == "--3d") {
-      cfg.save_3d_points = true;
     } else if (!assign_argument(argument, image_argument, landmarks_argument)) {
       throw make_runtime_error("Unable to process argument '%s'", argument.c_str());
     }
@@ -232,28 +234,20 @@ run_lists_mode(const Configuration &cfg,
     int result = tracker->NewFrame(gray_image, tracker_params);
 
     std::vector<cv::Point_<double> > shape;
-    std::vector<cv::Point3_<double> > shape3D;
-    Pose pose;
     if (result >= cfg.tracking_threshold) {
       shape = tracker->getShape();
-      shape3D = tracker->get3DShape();
-      pose = tracker->getPose();
     } else {
       tracker->Reset();
     }
 
     if (!have_argument_p(landmarks_argument)) {
-      display_data(cfg, image, shape, pose);
+      display_image_and_points(cfg, image, shape);    
     } else if (shape.size() > 0) {
-      if (cfg.save_3d_points)	
-	save_points3(landmarks_it->c_str(), shape3D);
-      else
-	save_points(landmarks_it->c_str(), shape);
-
+      IO::SavePts(landmarks_it->c_str(), shape);
       if (cfg.verbose)
-	display_data(cfg, image, shape, pose);
+	display_image_and_points(cfg, image, shape);
     } else if (cfg.verbose) {
-      display_data(cfg, image, shape, pose);
+      display_image_and_points(cfg, image, shape);
     }
 
     if (have_argument_p(landmarks_argument))
@@ -306,31 +300,21 @@ run_video_mode(const Configuration &cfg,
     int result = tracker->Track(gray_image, tracker_params);
 
     std::vector<cv::Point_<double> > shape;
-    std::vector<cv::Point3_<double> > shape3D;
-    Pose pose;
-
     if (result >= cfg.tracking_threshold) {
       shape = tracker->getShape();
-      shape3D = tracker->get3DShape();
-      pose = tracker->getPose();
     } else {
       tracker->Reset();
     }
 
     if (!have_argument_p(landmarks_argument)) {
-      display_data(cfg, image, shape, pose);
+      display_image_and_points(cfg, image, shape);
     } else if (shape.size() > 0) {
       snprintf(pathname_buffer.data(), pathname_buffer.size(), landmarks_argument->c_str(), frame_number);
-
-      if (cfg.save_3d_points)	
-	save_points3(pathname_buffer.data(), shape3D);
-      else
-	save_points(pathname_buffer.data(), shape);
-
+      IO::SavePts(pathname_buffer.data(), shape);
       if (cfg.verbose)
-	display_data(cfg, image, shape, pose);
+	display_image_and_points(cfg, image, shape);
     } else if (cfg.verbose) {
-      display_data(cfg, image, shape, pose);
+      display_image_and_points(cfg, image, shape);
     }
 
     input >> image;
@@ -357,22 +341,14 @@ run_image_mode(const Configuration &cfg,
   int result = tracker->NewFrame(gray_image, tracker_params);
 
   std::vector<cv::Point_<double> > shape;
-  std::vector<cv::Point3_<double> > shape3;
-  Pose pose;
   
-  if (result >= cfg.tracking_threshold) {
+  if (result >= cfg.tracking_threshold)
     shape = tracker->getShape();
-    shape3 = tracker->get3DShape();
-    pose = tracker->getPose();
-  }
 
   if (!have_argument_p(landmarks_argument)) {
-    display_data(cfg, image, shape, pose); 
+    display_image_and_points(cfg, image, shape);    
   } else if (shape.size() > 0) {
-    if (cfg.save_3d_points)
-      save_points3(landmarks_argument->c_str(), shape3);
-    else
-      save_points(landmarks_argument->c_str(), shape);
+    IO::SavePts(landmarks_argument->c_str(), shape);
   }
  
   delete tracker;
@@ -381,34 +357,10 @@ run_image_mode(const Configuration &cfg,
   return 0;
 }
 
-cv::Mat
-compute_pose_image(const Pose &pose, int height, int width)
-{
-  cv::Mat_<cv::Vec<uint8_t,3> > rv = cv::Mat_<cv::Vec<uint8_t,3> >::zeros(height,width);
-  cv::Mat_<double> axes = pose_axes(pose);
-  cv::Mat_<double> scaling = cv::Mat_<double>::eye(3,3);
-
-  for (int i = 0; i < axes.cols; i++) {
-    axes(0,i) = -0.5*double(width)*(axes(0,i) - 1);
-    axes(1,i) = -0.5*double(height)*(axes(1,i) - 1);
-  }
-  
-  cv::Point centre(width/2, height/2);
-  // pitch
-  cv::line(rv, centre, cv::Point(axes(0,0), axes(1,0)), cv::Scalar(255,0,0));
-  // yaw
-  cv::line(rv, centre, cv::Point(axes(0,1), axes(1,1)), cv::Scalar(0,255,0));
-  // roll
-  cv::line(rv, centre, cv::Point(axes(0,2), axes(1,2)), cv::Scalar(0,0,255));
-
-  return rv;
-}
-
 void
-display_data(const Configuration &cfg,
-	     const cv::Mat &image,
-	     const std::vector<cv::Point_<double> > &points,
-	     const Pose &pose)
+display_image_and_points(const Configuration &cfg,
+			 const cv::Mat &image,
+			 const std::vector<cv::Point_<double> > &points)
 {
 
   cv::Scalar colour;
@@ -419,28 +371,10 @@ display_data(const Configuration &cfg,
   else
     colour = cv::Scalar(255);
 
-  cv::Mat displayed_image;
-  if (image.type() == cv::DataType<cv::Vec<uint8_t,3> >::type)
-    displayed_image = image.clone();
-  else if (image.type() == cv::DataType<uint8_t>::type)
-    cv::cvtColor(image, displayed_image, CV_GRAY2BGR);
-  else 
-    throw make_runtime_error("Unsupported camera image type for display_data function.");
+  cv::Mat displayed_image(image.clone());
 
   for (size_t i = 0; i < points.size(); i++) {
     cv::circle(displayed_image, points[i], cfg.circle_radius, colour, cfg.circle_thickness, cfg.circle_linetype, cfg.circle_shift);
-  }
-
-  int pose_image_height = 100;
-  int pose_image_width = 100;
-  cv::Mat pose_image = compute_pose_image(pose, pose_image_height, pose_image_width);
-  for (int i = 0; i < pose_image_height; i++) {
-    for (int j = 0; j < pose_image_width; j++) {
-      displayed_image.at<cv::Vec<uint8_t,3> >(displayed_image.rows - pose_image_height + i,
-					      displayed_image.cols - pose_image_width + j)
-			 
-			 = pose_image.at<cv::Vec<uint8_t,3> >(i,j);
-    }
   }
 
   cv::imshow(cfg.window_title, displayed_image);
@@ -453,3 +387,70 @@ display_data(const Configuration &cfg,
   if (ch == 27) // escape
     throw user_pressed_escape();
 }
+
+
+PyObject*
+get_face_landmarks(PyObject * in)
+{  
+  //ndarray cv::Mat conversion
+  NDArrayConverter cvt;
+  cv::Mat gray_image { cvt.toMat(in) };
+
+  CommandLineArgument<std::string> landmarks_argument;
+
+  Configuration cfg;
+  cfg.wait_time = 0;
+  cfg.model_pathname = DefaultFaceTrackerModelPathname();
+  cfg.params_pathname = DefaultFaceTrackerParamsPathname();
+  cfg.tracking_threshold = 5;
+  cfg.window_title = "CSIRO Face Fit";
+  cfg.verbose = false;
+  cfg.circle_radius = 2;
+  cfg.circle_thickness = 1;
+  cfg.circle_linetype = 8;
+  cfg.circle_shift = 0;
+
+
+  FaceTracker * tracker = LoadFaceTracker(cfg.model_pathname.c_str());
+  FaceTrackerParams *tracker_params  = LoadFaceTrackerParams(cfg.params_pathname.c_str());
+
+
+  int result = tracker->NewFrame(gray_image, tracker_params);
+
+  std::vector<cv::Point_<double> > shape;
+  
+  if (result >= cfg.tracking_threshold)
+    shape = tracker->getShape();
+
+  cv::Mat landmarks;
+  if (shape.size() > 0) {
+      landmarks = cv::Mat(shape.size(), 2, CV_32F);
+
+      for (int i = 0; i < shape.size(); i++) {
+        landmarks.at<float>(i, 0) = shape[i].x;
+        landmarks.at<float>(i, 1) = shape[i].y;
+      }
+  } else {
+      landmarks = cv::Mat(0, 0, CV_32F);
+  }
+ 
+  delete tracker;
+  delete tracker_params; 
+
+  // cv::Mat to ndarray
+  return cvt.toNDArray(landmarks);
+}
+
+
+static void init()
+{
+    Py_Initialize();
+    import_array();
+}
+
+BOOST_PYTHON_MODULE(face_fit)
+{
+    init();
+    bp::def("get_face_landmarks", get_face_landmarks);
+}
+
