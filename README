@@ -3,3 +3,8 @@ http://github.com/ci2cv/face-analysis-sdk
 
 TODO:
 1. landmark generator python warpper. 
+
+How to build
+$ mkdir build
+$ cmake ..
+$ make
