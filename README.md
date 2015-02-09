@@ -10,6 +10,12 @@ https://github.com/yati-sagade/opencv-ndarray-conversion
 ###TODO:
 1. landmark generator python warpper. 
 
+###Dependencies(dev packages):
+- Boost::Python
+- Numpy
+- OpenCV
+
+
 ###How to build:
 ```bash
 $ mkdir build && cd build
