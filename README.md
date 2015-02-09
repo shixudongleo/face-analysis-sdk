@@ -16,6 +16,7 @@ $ mkdir build && cd build
 $ cmake ..
 $ make
 ```
+After make, the desired python face landmark module is under lib folder(face_fit.so). 
 
 ###How to use face landmark detector:
 ```python
