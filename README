@@ -12,7 +12,7 @@ $ make
 
 How to use face landmark detector
 
-```
+```python
 
 import cv2
 from face_fit import FaceLandmarkDetector
