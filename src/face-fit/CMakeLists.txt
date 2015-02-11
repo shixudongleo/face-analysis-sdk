@@ -19,6 +19,17 @@ elseif (APPLE)
   set_target_properties(face_fit PROPERTIES SUFFIX ".so")
 endif()
 
+# Build face landmark function generator warpper
+add_library(face_fit_fun SHARED face_fit_fun.cpp )
+target_link_libraries(face_fit_fun ${Boost_LIBRARIES} ${PYTHON_LIBRARIES} ${LIBS} ${OpenCV_LIBRARIES} face_fit_fun utilities clmTracker conversion)
+# don't prepend wrapper library name with lib
+set_target_properties(face_fit_fun PROPERTIES PREFIX "" )
+if(WIN32)
+  set_target_properties(face_fit_fun PROPERTIES SUFFIX ".pyd")
+elseif (APPLE)
+  set_target_properties(face_fit_fun PROPERTIES SUFFIX ".so")
+endif()
+
 
 # Define the wrapper library that wraps our library
 add_library(examples SHARED examples.cpp )
