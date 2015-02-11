@@ -5,6 +5,36 @@ cmake_minimum_required(VERSION 2.8)
 
 #set(CMAKE_VERBOSE_MAKEFILE true)
 
+
+find_package( PythonLibs 2.7 REQUIRED )
+include_directories( ${PYTHON_INCLUDE_DIRS} )
+
+find_package( Boost COMPONENTS python REQUIRED )
+include_directories( ${Boost_INCLUDE_DIR} )
+
+find_package( OpenCV REQUIRED )
+include_directories( ${OpenCV_INCLUDE_DIR} )
+
+# print out test message for python version
+foreach(REQUIRED_PYTHON_VERSION 2.7)
+ message(STATUS "======== LOOKING FOR ${REQUIRED_PYTHON_VERSION} ========================")
+ find_package ( PythonInterp ${REQUIRED_PYTHON_VERSION} REQUIRED)
+ find_package ( PythonLibs ${PYTHON_VERSION_STRING} EXACT)
+ #find_package ( PythonLibs ${PYTHON_VERSION_STRING} EXACT REQUIRED )
+
+
+  message(STATUS "PYTHON_EXECUTABLE:FILEPATH=${PYTHON_EXECUTABLE}")
+  message(STATUS "PYTHON_LIBRARY:FILEPATH=${PYTHON_LIBRARY}")
+  message(STATUS "PYTHON_INCLUDE_DIR:FILEPATH=${PYTHON_INCLUDE_DIR}")
+  message(STATUS "PYTHON_FRAMEWORK_INCLUDES=${PYTHON_FRAMEWORK_INCLUDES}")
+  message(STATUS "PYTHONLIBS_VERSION_STRING=${PYTHONLIBS_VERSION_STRING}")
+  message(STATUS "Python_FRAMEWORKS=${Python_FRAMEWORKS}")
+
+  unset(PYTHON_EXECUTABLE CACHE)
+  unset(PYTHON_LIBRARY CACHE)
+  unset(PYTHON_INCLUDE_DIR CACHE)
+endforeach()
+
 # Default values for options
 if(NOT DEFINED OpenCV_PREFIX)
   set(OpenCV_PREFIX ${CMAKE_INSTALL_PREFIX})
