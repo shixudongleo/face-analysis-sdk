@@ -75,9 +75,12 @@ public:
 	  int result = tracker_->NewFrame(gray_image, tracker_params_);
 
 	  std::vector<cv::Point_<double> > shape;
-	  
-	  if (result >= cfg_.tracking_threshold)
+
+	  if (result >= cfg_.tracking_threshold) {
 	    shape = tracker_->getShape();
+	  } else {
+	    tracker_->Reset();
+	  }
 
 	  cv::Mat landmarks;
 	  if (shape.size() > 0) {
