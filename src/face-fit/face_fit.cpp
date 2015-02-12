@@ -38,10 +38,6 @@ struct Configuration
 class FaceLandmarkDetector
 {
 public:
-	Configuration cfg_;
-	FaceTracker * tracker_;
-	FaceTrackerParams *tracker_params_;
-	 
 	FaceLandmarkDetector()
 	{
 	  cfg_.wait_time = 0;
@@ -66,21 +62,71 @@ public:
 	}
 
 	PyObject*
-	get_face_landmarks(PyObject * in)
+	get_face_landmarks_image_mode(PyObject * in)
 	{  
 	  //ndarray cv::Mat conversion
 	  NDArrayConverter cvt;
-	  cv::Mat gray_image { cvt.toMat(in) };
+	  cv::Mat image = { cvt.toMat(in) };
+	  cv::Mat_<uint8_t> gray_image;
 
-	  int result = tracker_->NewFrame(gray_image, tracker_params_);
+	  assert(tracker_);
+      assert(tracker_params_);
+	   
+      if (image.type() == cv::DataType<cv::Vec<uint8_t,3> >::type)
+        cv::cvtColor(image, gray_image, CV_BGR2GRAY);
+      else 
+      	gray_image = image;
 
-	  std::vector<cv::Point_<double> > shape;
+      int result = tracker_->NewFrame(gray_image, tracker_params_);
 
-	  if (result >= cfg_.tracking_threshold) {
-	    shape = tracker_->getShape();
+      std::vector<cv::Point_<double> > shape;
+
+      if (result >= cfg_.tracking_threshold) {
+        shape = tracker_->getShape();
+        tracker_->Reset();
+      } 
+
+	  cv::Mat landmarks;
+	  if (shape.size() > 0) {
+	      landmarks = cv::Mat(shape.size(), 2, CV_32F);
+
+	      for (int i = 0; i < shape.size(); i++) {
+	        landmarks.at<float>(i, 0) = shape[i].x;
+	        landmarks.at<float>(i, 1) = shape[i].y;
+	      }
 	  } else {
-	    tracker_->Reset();
-	  }
+	      landmarks = cv::Mat(0, 0, CV_32F);
+	  } 
+
+	  // cv::Mat to ndarray
+	  return cvt.toNDArray(landmarks);
+	}
+
+	PyObject*
+	get_face_landmarks_video_mode(PyObject * in)
+	{  
+	  //ndarray cv::Mat conversion
+	  NDArrayConverter cvt;
+	  cv::Mat image = { cvt.toMat(in) };
+	  cv::Mat_<uint8_t> gray_image;
+
+	  assert(tracker_);
+      assert(tracker_params_);
+	   
+      if (image.type() == cv::DataType<cv::Vec<uint8_t,3> >::type)
+        cv::cvtColor(image, gray_image, CV_BGR2GRAY);
+      else 
+      	gray_image = image;
+
+      int result = tracker_->Track(gray_image, tracker_params_);
+
+      std::vector<cv::Point_<double> > shape;
+
+      if (result >= cfg_.tracking_threshold) {
+        shape = tracker_->getShape();
+      } else {
+        tracker_->Reset();
+      }
 
 	  cv::Mat landmarks;
 	  if (shape.size() > 0) {
@@ -97,6 +143,12 @@ public:
 	  // cv::Mat to ndarray
 	  return cvt.toNDArray(landmarks);
 	}	
+
+private: 
+	Configuration cfg_;
+	FaceTracker * tracker_;
+	FaceTrackerParams *tracker_params_;
+
 };
 
 
@@ -111,6 +163,7 @@ BOOST_PYTHON_MODULE(face_fit)
 {
     init();
     bp::class_<FaceLandmarkDetector>("FaceLandmarkDetector")
-    		.def("get_face_landmarks", &FaceLandmarkDetector::get_face_landmarks);
+    		.def("get_face_landmarks_image_mode", &FaceLandmarkDetector::get_face_landmarks_image_mode)
+    		.def("get_face_landmarks_video_mode", &FaceLandmarkDetector::get_face_landmarks_video_mode);
 }
 
