@@ -30,10 +30,11 @@ import cv2
 from face_fit import FaceLandmarkDetector
 
 img = cv2.imread('face_image.jpg')
-gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
 ld = FaceLandmarkDetector()
 
-landmarks = ld.get_face_landmarks(gray)
+landmarks = ld.get_face_landmarks_image_mode(img)
+# if your are applying to video use 
+# landmarks = ld.get_face_landmarks_video_mode(img)
+
 print landmarks
 ```
